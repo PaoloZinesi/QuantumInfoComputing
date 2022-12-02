@@ -1,0 +1,5 @@
+
+
+gfortran EX1a_Zinesi_CODE.f90
+
+

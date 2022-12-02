@@ -1,0 +1,14 @@
+
+
+# this compilation is not allowed because of the overflow issue
+gfortran EX1b_Zinesi_CODE.f90
+
+
+# we now force the compilation to get the "desired" wrong behaviour
+gfortran EX1b_Zinesi_CODE.f90 -fno-range-check
+
+
+# warning on all type conversions arise with this compilation
+gfortran EX1b_Zinesi_CODE.f90 -fno-range-check -Wconversion
+
+

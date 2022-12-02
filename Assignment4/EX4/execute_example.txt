@@ -1,0 +1,19 @@
+
+# both the source code and the modules have a debug variable set to .FALSE.
+# change them and recompile everything if a different behavior is desired
+
+./a.out 10000 10 input/omega.dat results/out.dat
+# will evaluate N=10000 function points of the 1D harmonic oscillator,
+# find k=10 eigenvalues,
+# take the value of omega from 'input/omega.dat' file and 
+# write the results on 'results/out.dat'.
+
+
+# pay attention run 'bash compile.sh' script only when previous results
+# can be removed, since the script will remove every file in the folder 'results'
+
+# error messages in the execution are stored in 'errors.log' file
+
+
+# when all the calculations are finished and stored into 'results',
+# run the python code "EX4_plots.ipynb" to obtain the plots

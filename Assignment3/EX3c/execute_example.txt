@@ -1,0 +1,28 @@
+
+# both the source code and the modules have a debug variable set to .FALSE.
+# change them and recompile everything if a different behavior is desired
+
+
+# create a 1000x1000 random Hermitian matrix, compute its eigenvalues and append the 
+# normalized spacings in 'results/norm_spac_HS.dat'
+./a.out 1000 HS
+
+
+# create random real diagonal matrix and append the normalized spacings 
+# in 'results/norm_spac_DS.dat'
+./a.out 1000 DS
+
+# multiple consecutive runs of 'a.out' will append the resulted
+# spacings at the end of the relative file
+
+
+
+# results are stored in files inside the folder 'results' (the 'results_example'
+# folder contains an example of data and its plot)
+
+# error messages in the execution are stored in 'errors.log' file
+
+# when all the calculations are finished and stored into 'results',
+# run the script 'EX3c_plots.py' to obtain the fitted plots in the same
+# folder 'result'
+python3.8 EX3c_plots.py

@@ -30,3 +30,13 @@
 *.exe
 *.out
 *.app
+
+# Mac-Os files
+.DS_STORE
+
+# ZIP, images, data, log files
+*.zip
+*.png
+*.jpg
+*.dat
+*.log

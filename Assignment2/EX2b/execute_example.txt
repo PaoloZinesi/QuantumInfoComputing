@@ -1,0 +1,10 @@
+
+# both the source code and the modules have a debug variable set to .TRUE.
+# change them and recompile everything if a different behavior is desired
+
+# allocate 5x6 and 6x7 matrices and compute the matrix product
+./a.out 5 6 6 7
+
+# an error is raised when the 2nd and 3rd arguments are different
+./a.out 5 5 6 7
+

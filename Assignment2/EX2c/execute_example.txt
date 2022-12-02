@@ -1,0 +1,20 @@
+
+# both the source code and the modules have a debug variable set to .TRUE.
+# change them and recompile everything if a different behavior is desired
+
+# allocate and fill a 3x3 matrix, then
+# compute the adjoint matrix and the traces of both matrices.
+# Two files, 'M_3_3.dat' and 'M_adj_3_3.dat', will be created
+# containing the complex values in a readable form
+./a.out 3 3
+
+# allocate and fill a 3x2 matrix, then
+# compute the adjoint matrix
+# Two files, 'M_3_2.dat' and 'M_adj_2_3.dat', will be created
+# containing the complex values in a readable form
+# The program will halt when trying to compute the traces
+./a.out 3 2
+
+
+# recompile everything to get rid of all the generated '*.dat' files
+bash compile.sh

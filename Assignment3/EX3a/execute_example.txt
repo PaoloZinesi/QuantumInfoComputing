@@ -1,0 +1,23 @@
+
+# both the source code and the modules have a debug variable set to .FALSE.
+# change them and recompile everything if a different behavior is desired
+
+# allocate 5x6 and 6x7 matrices and compute the matrix product using 
+# the using the 'my_MatMul_opt' subroutine
+./a.out 5 6 6 7 opt
+
+
+
+# results are stored in files inside the folder 'results' (the 'results_example'
+# folder contains an example of data and its plot)
+
+# pay attention run 'bash compile.sh' script only when previous results
+# can be removed, since the script will remove every file in the folder 'results'
+
+# error messages in the execution are stored in 'errors.log' file
+
+
+# when all the calculations are finished and stored into 'results',
+# run the script 'EX3a_plots.py' to obtain the fitted plot in the same
+# folder 'result'
+python3.8 EX3a_plots.py

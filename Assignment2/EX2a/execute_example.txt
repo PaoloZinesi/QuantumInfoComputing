@@ -1,0 +1,5 @@
+
+# change the value of "debug" in the source code to observe
+# the two different behaviors (checkpoints on and off)
+./a.out
+

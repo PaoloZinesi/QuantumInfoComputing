@@ -1,0 +1,12 @@
+
+# both the source code and the modules have a debug variable set to .FALSE.
+# change them and recompile everything if a different behavior is desired
+
+# allocate a 1000x1000 random Hermitian matrix, compute its eigenvalues and store the 
+# normalized spacings in 'results/norm_spac.dat'
+./a.out 1000
+
+
+# multiple consecutive runs of 'a.out' will append the resulted
+# spacings at the end of the 'results/norm_spac.dat', which will be used to gather
+# eigenvalue statistics in exercise 3c
