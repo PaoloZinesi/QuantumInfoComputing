@@ -14,7 +14,7 @@ MODULE Zwavefunc_mod
       IMPLICIT NONE
 
       ! enable or disable debugging for this module ONLY
-      LOGICAL, PRIVATE :: debug = .TRUE.
+      LOGICAL, PRIVATE :: debug = .FALSE.
 
       ! declaration of derived type
       TYPE Zwavefunc
@@ -256,20 +256,23 @@ MODULE Zwavefunc_mod
 
       ! This function returns the integral of the modulus squared of the wavefunction
       ! using Simpson's rule. The integral is computed according to the deltax parameter
-      ! stored in Zwavefunc composite type.
+      ! stored in Zwavefunc composite type. This function is also able to compute the 
+      ! weighted integral of the wavefunction according to the weights vector given in input.
       !
       ! inputs:
       ! - WF [Zwavefunc]: input Zwavefunc to compute the integral of
+      ! - weights [REAL*8(size=WF%len)]: vector of weights to be applied during the integration
       !
       ! outputs:
       ! - norm2 [REAL*8]: integral of |WF|^2 in dx using Simpson's rule
       ! 
       ! TODO: add the possibility of computing a weighted integral (useful for average value)
       ! 
-      REAL*8 FUNCTION norm2_WF(WF) RESULT(norm2)
+      REAL*8 FUNCTION norm2_WF(WF, weights) RESULT(norm2)
             IMPLICIT NONE
 
             TYPE(Zwavefunc), INTENT(IN) :: WF
+            REAL*8, DIMENSION(:), INTENT(IN), OPTIONAL :: weights
             INTEGER :: istart, iend
 
 
@@ -285,56 +288,121 @@ MODULE Zwavefunc_mod
                   STOP
             END IF
 
+            IF((PRESENT(weights) .EQV. .TRUE.) .AND. (SIZE(weights) .NE. WF%len)) THEN
+                  PRINT "('`norm2_WF`: sizes of weights and WF do not match')"
+                  STOP
+            END IF
+
+
             norm2 = 0.D0
             ! implement Simpson's rule
-            IF(MOD(WF%len,2) .EQ. 1) THEN
+            IF(PRESENT(weights) .EQV. .TRUE.) THEN
+                  IF(MOD(WF%len,2) .EQ. 1) THEN
 
-                  istart = 1
-                  iend = WF%len
-                  ! odd case: a single sum is computed
-                  IF(WF%useFFT .EQV. .FALSE.) THEN
-                        norm2 =     norm2 + &
-                                    (WF%deltax/3.D0)*(ABS(WF%elem(istart))**2 + ABS(WF%elem(iend))**2 + &
-                                                4*SUM(ABS(WF%elem(istart+1:iend-1:2))**2) + &
-                                                2*SUM(ABS(WF%elem(istart+2:iend-2:2))**2))
+                        istart = 1
+                        iend = WF%len
+                        ! odd case: a single sum is computed
+                        IF(WF%useFFT .EQV. .FALSE.) THEN
+                              norm2 =     norm2 + &
+                                          (WF%deltax/3.D0)*(weights(istart)*ABS(WF%elem(istart))**2 + &
+                                                            weights(iend)*ABS(WF%elem(iend))**2 + &
+                                                            4*SUM(weights(istart+1:iend-1:2)*ABS(WF%elem(istart+1:iend-1:2))**2) + &
+                                                            2*SUM(weights(istart+2:iend-2:2)*ABS(WF%elem(istart+2:iend-2:2))**2))
+                        ELSE
+                              norm2 =     norm2 + &
+                                          (WF%deltax/3.D0)*(weights(istart)*ABS(WF%elem_fftw(istart))**2 + &
+                                                            weights(iend)*ABS(WF%elem_fftw(iend))**2 + &
+                                                            4*SUM(weights(istart+1:iend-1:2)*ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
+                                                            2*SUM(weights(istart+2:iend-2:2)*ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        END IF
                   ELSE
-                        norm2 =     norm2 + &
-                                    (WF%deltax/3.D0)*(ABS(WF%elem_fftw(istart))**2 + ABS(WF%elem_fftw(iend))**2 + &
-                                                4*SUM(ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
-                                                2*SUM(ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        ! even case: two sums are computed and averaged together
+      
+                        ! first sum over [1 : N-1]
+                        istart = 1
+                        iend = WF%len - 1
+                        IF(WF%useFFT .EQV. .FALSE.) THEN
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(weights(istart)*ABS(WF%elem(istart))**2 + &
+                                                                  weights(iend)*ABS(WF%elem(iend))**2 + &
+                                                                  4*SUM(weights(istart+1:iend-1:2)*ABS(WF%elem(istart+1:iend-1:2))**2) + &
+                                                                  2*SUM(weights(istart+2:iend-2:2)*ABS(WF%elem(istart+2:iend-2:2))**2))
+                        ELSE
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(weights(istart)*ABS(WF%elem_fftw(istart))**2 + &
+                                                                  weights(iend)*ABS(WF%elem_fftw(iend))**2 + &
+                                                                  4*SUM(weights(istart+1:iend-1:2)*ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
+                                                                  2*SUM(weights(istart+2:iend-2:2)*ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        END IF
+      
+                        ! second sum over [2 : N]
+                        istart = 2
+                        iend = WF%len
+                        ! even case: two sums are computed and averaged together
+                        IF(WF%useFFT .EQV. .FALSE.) THEN
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(weights(istart)*ABS(WF%elem(istart))**2 + &
+                                                                  weights(iend)*ABS(WF%elem(iend))**2 + &
+                                                                  4*SUM(weights(istart+1:iend-1:2)*ABS(WF%elem(istart+1:iend-1:2))**2) + &
+                                                                  2*SUM(weights(istart+2:iend-2:2)*ABS(WF%elem(istart+2:iend-2:2))**2))
+                        ELSE
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(weights(istart)*ABS(WF%elem_fftw(istart))**2 + &
+                                                                  weights(iend)*ABS(WF%elem_fftw(iend))**2 + &
+                                                                  4*SUM(weights(istart+1:iend-1:2)*ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
+                                                                  2*SUM(weights(istart+2:iend-2:2)*ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        END IF
                   END IF
             ELSE
-                  ! even case: two sums are computed and averaged together
+                  IF(MOD(WF%len,2) .EQ. 1) THEN
 
-                  ! first sum over [1 : N-1]
-                  istart = 1
-                  iend = WF%len - 1
-                  IF(WF%useFFT .EQV. .FALSE.) THEN
-                        norm2 =     norm2 + &
-                                    0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem(istart))**2 + ABS(WF%elem(iend))**2 + &
-                                                4*SUM(ABS(WF%elem(istart+1:iend-1:2))**2) + &
-                                                2*SUM(ABS(WF%elem(istart+2:iend-2:2))**2))
+                        istart = 1
+                        iend = WF%len
+                        ! odd case: a single sum is computed
+                        IF(WF%useFFT .EQV. .FALSE.) THEN
+                              norm2 =     norm2 + &
+                                          (WF%deltax/3.D0)*(ABS(WF%elem(istart))**2 + ABS(WF%elem(iend))**2 + &
+                                                      4*SUM(ABS(WF%elem(istart+1:iend-1:2))**2) + &
+                                                      2*SUM(ABS(WF%elem(istart+2:iend-2:2))**2))
+                        ELSE
+                              norm2 =     norm2 + &
+                                          (WF%deltax/3.D0)*(ABS(WF%elem_fftw(istart))**2 + ABS(WF%elem_fftw(iend))**2 + &
+                                                      4*SUM(ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
+                                                      2*SUM(ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        END IF
                   ELSE
-                        norm2 =     norm2 + &
-                                    0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem_fftw(istart))**2 + ABS(WF%elem_fftw(iend))**2 + &
-                                                4*SUM(ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
-                                                2*SUM(ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
-                  END IF
-
-                  ! second sum over [2 : N]
-                  istart = 2
-                  iend = WF%len
-                  ! even case: two sums are computed and averaged together
-                  IF(WF%useFFT .EQV. .FALSE.) THEN
-                        norm2 =     norm2 + &
-                                    0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem(istart))**2 + ABS(WF%elem(iend))**2 + &
-                                                4*SUM(ABS(WF%elem(istart+1:iend-1:2))**2) + &
-                                                2*SUM(ABS(WF%elem(istart+2:iend-2:2))**2))
-                  ELSE
-                        norm2 =     norm2 + &
-                                    0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem_fftw(istart))**2 + ABS(WF%elem_fftw(iend))**2 + &
-                                                4*SUM(ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
-                                                2*SUM(ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        ! even case: two sums are computed and averaged together
+      
+                        ! first sum over [1 : N-1]
+                        istart = 1
+                        iend = WF%len - 1
+                        IF(WF%useFFT .EQV. .FALSE.) THEN
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem(istart))**2 + ABS(WF%elem(iend))**2 + &
+                                                      4*SUM(ABS(WF%elem(istart+1:iend-1:2))**2) + &
+                                                      2*SUM(ABS(WF%elem(istart+2:iend-2:2))**2))
+                        ELSE
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem_fftw(istart))**2 + ABS(WF%elem_fftw(iend))**2 + &
+                                                      4*SUM(ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
+                                                      2*SUM(ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        END IF
+      
+                        ! second sum over [2 : N]
+                        istart = 2
+                        iend = WF%len
+                        ! even case: two sums are computed and averaged together
+                        IF(WF%useFFT .EQV. .FALSE.) THEN
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem(istart))**2 + ABS(WF%elem(iend))**2 + &
+                                                      4*SUM(ABS(WF%elem(istart+1:iend-1:2))**2) + &
+                                                      2*SUM(ABS(WF%elem(istart+2:iend-2:2))**2))
+                        ELSE
+                              norm2 =     norm2 + &
+                                          0.5D0*(WF%deltax/3.D0)*(ABS(WF%elem_fftw(istart))**2 + ABS(WF%elem_fftw(iend))**2 + &
+                                                      4*SUM(ABS(WF%elem_fftw(istart+1:iend-1:2))**2) + &
+                                                      2*SUM(ABS(WF%elem_fftw(istart+2:iend-2:2))**2))
+                        END IF
                   END IF
             END IF
 

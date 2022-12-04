@@ -12,4 +12,5 @@ gfortran -Wall -Wextra -O3 \
 
 # compile all the modules
 gfortran -Wall -Wextra -O3 \
+-ffree-line-length-196 \
 -c *.f90

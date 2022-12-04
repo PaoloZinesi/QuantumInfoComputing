@@ -1,11 +1,14 @@
 ! Program to simulate the time evolution of a wavefunction (in the ground state
 ! of the harmonic oscillator at t=0) subject to a quadratic potential which minimum
 ! point moves linearly in time along the positive direction.
-! ........
+! The parameters needed by the program are given in the command-line and the results are
+! printed on file to produce the output plots.
 ! 
 ! Example of execution:
-! ./TD_HarmOsc_1D
-! will ....
+! ./TD_HarmOsc_1D.out 100 input/omega.dat input/Ttot.dat input/init_WF.dat
+! will evolve the wavefunction from t=0 to t=Ttot through 100 time steps, using the value of omega found
+! in 'input/omega.dat', the value of Ttot found in 'input/Ttot.dat' and the initialization wavefunction
+! found in 'input/init_WF.dat'. Results are created in the 'results' folder.
 !
 ! Author: Paolo Zinesi
 !
@@ -20,7 +23,7 @@ PROGRAM TD_HarmOsc_1D
       LOGICAL :: debug = .TRUE.
 
       ! variables to read command-line arguments
-      CHARACTER(LEN=100) :: arg, paramfile, initfile, outfile
+      CHARACTER(LEN=100) :: arg, paramfile, initfile
 
       ! input information and parameters definition
       INTEGER :: Nx, Nt
@@ -28,7 +31,8 @@ PROGRAM TD_HarmOsc_1D
 
       ! utility and loop variables
       REAL*8, PARAMETER :: PI = 4.D0*ATAN(1.D0)
-      INTEGER :: t_idx
+      CHARACTER(LEN=100) :: str
+      INTEGER :: print_idx, t_idx
 
       ! wavefunctions
       INTEGER :: Ninit, idx_minL, idx_minR
@@ -49,7 +53,7 @@ PROGRAM TD_HarmOsc_1D
       ! read command-line arguments
       ! -----------------------------------------
 
-      IF (COMMAND_ARGUMENT_COUNT() .EQ. 5) THEN
+      IF (COMMAND_ARGUMENT_COUNT() .EQ. 4) THEN
 
             ! Nt: number of discretization points in time
             CALL GET_COMMAND_ARGUMENT(1, arg)
@@ -72,15 +76,12 @@ PROGRAM TD_HarmOsc_1D
 
             ! initfile: filename where to read the initial wavefunction
             CALL GET_COMMAND_ARGUMENT(4, initfile)
-
-            ! outifle: filename where to write results
-            CALL GET_COMMAND_ARGUMENT(5, outfile)
             
       ELSE
             ! write error details into an error log file 
             PRINT *, "An error occurred, details on 'errors.log'"
-            WRITE(10, "('Exactly 5 command-line arguments are expected:')")
-            WRITE(10, "('Nt, omega_file, Ttot_file, init_file, out_file')")
+            WRITE(10, "('Exactly 4 command-line arguments are expected:')")
+            WRITE(10, "('Nt, omega_file, Ttot_file, init_file')")
             STOP
       END IF
 
@@ -145,8 +146,18 @@ PROGRAM TD_HarmOsc_1D
       ! definition of total wavefunctions
       ! -----------------------------------------
 
-      ! create and fill total wavefunction in the x domain
+      ! create total wavefunctions in the x and p domain
       psi_x = Zwavefunc(length=Nx, need_fftw_alloc=.TRUE.)
+      psi_p = Zwavefunc(length=Nx, need_fftw_alloc=.TRUE.)
+
+
+      ! create FFTW plans before filling the arrays (this procedure might change the array values)
+      plan_direct = fftw_plan_dft_1d(Nx, psi_x%elem_fftw,psi_p%elem_fftw, FFTW_FORWARD,FFTW_MEASURE)
+      plan_inverse = fftw_plan_dft_1d(Nx, psi_p%elem_fftw,psi_x%elem_fftw, FFTW_BACKWARD,FFTW_MEASURE)
+      CALL checkpoint(debug, str="FFTW plans created.")
+
+
+      ! fill wavefunctions in the x domain
       CALL create_grid(psi_x, xmin=xmin, xmax=1.D0+ABS(xmin))
       psi_x%elem_fftw(1:(idx_minR - idx_minL + 1)) = psi0_x(idx_minL:idx_minR)
       psi_x%elem_fftw((idx_minR - idx_minL + 2):) = 0.D0
@@ -157,8 +168,7 @@ PROGRAM TD_HarmOsc_1D
       ! free memory used to store initial wavefunction
       DEALLOCATE(psi0_x, psi0_xgrid)
 
-      ! create and fill total wavefunction in the p domain
-      psi_p = Zwavefunc(length=Nx, need_fftw_alloc=.TRUE.)
+      ! fill total wavefunction in the p domain
       CALL create_grid(psi_p, xmin=0.D0, xmax=(2*PI*Nx)/Ltot)
 
       ! shift the grid of p in order to be compatible with both FFTW and physical
@@ -171,77 +181,50 @@ PROGRAM TD_HarmOsc_1D
       ! time evolution
       ! -----------------------------------------
 
+      CALL SYSTEM("mkdir -p results")
+      CALL checkpoint(debug, str="Started computing time evolution")
+
+      deltat = Ttot/Nt
+
       ! vector to transform wavefunctions
       ALLOCATE(operator(Nx))
 
+      print_idx = 1
+      DO t_idx = 1, Nt
+            ! V/2 propagation
+            operator = EXP(COMPLEX(0.D0,-1.D0)*deltat*(omega**2)*0.5D0*(psi_x%grid - (t_idx*1.D0)/Nt)**2)
+            psi_x%elem_fftw = psi_x%elem_fftw * operator
+
+            ! Fourier Transform
+            CALL fftw_execute_dft(plan_direct, psi_x%elem_fftw, psi_p%elem_fftw)
+
+            ! T propagation
+            operator = EXP(COMPLEX(0.D0,-1.D0)*deltat*(psi_p%grid)**2)
+            psi_p%elem_fftw = psi_p%elem_fftw * operator
+
+            ! Inverse Fourier Transform
+            CALL fftw_execute_dft(plan_inverse, psi_p%elem_fftw, psi_x%elem_fftw)
+            psi_x%elem_fftw = psi_x%elem_fftw / Nx
+
+            ! V/2 propagation
+            operator = EXP(COMPLEX(0.D0,-1.D0)*deltat*(omega**2)*0.5D0*(psi_x%grid - (t_idx*1.D0)/Nt)**2)
+            psi_x%elem_fftw = psi_x%elem_fftw * operator
+
+            ! print wavefunctions on file
+            IF(MOD(t_idx, 10) .EQ. 0) THEN
+                  WRITE(str, "('results/outWF_', I0, '.dat')") t_idx
+                  CALL writeWFFile(psi_x, unit=30+print_idx, file=TRIM(str), format="ES24.17")
+                  print_idx = print_idx + 1
+
+                  PRINT *, norm2_WF(psi_x, weights=psi_x%grid)
+            END IF
+
+      END DO
+
+      CALL checkpoint(debug, str="Finished computing time evolution")
 
 
-
-      ! WF declarations and allocations
-      ! TYPE(Zwavefunc) :: psi_x, psi_p, psi_try
-      ! psi_x = Zwavefunc(length=NN, need_fftw_alloc=.TRUE.)
-      ! psi_p = Zwavefunc(length=NN, need_fftw_alloc=.TRUE.)
-      ! psi_try = Zwavefunc(length=20, need_fftw_alloc=.TRUE.)
-
-      ! ! create plans before filling the arrays
-      ! CALL CPU_TIME(ti)
-      ! plan_direct = fftw_plan_dft_1d(NN, psi_x%elem_fftw,psi_p%elem_fftw, FFTW_FORWARD,FFTW_MEASURE)
-      ! plan_inverse = fftw_plan_dft_1d(NN, psi_p%elem_fftw,psi_x%elem_fftw, FFTW_BACKWARD,FFTW_MEASURE)
-      ! CALL CPU_TIME(tf)
-      ! CALL checkpoint(debug, str="Time [s] necessary to produce both plans =", val=tf-ti)
-
-      ! ! fill array grids
-      ! CALL create_grid(psi_x, xmin=0.D0, xmax=LL)
-      ! CALL create_grid(psi_p, xmin=0.D0, xmax=(2*PI*NN)/LL)
-
-      ! ! shift the grid of p in order to be compatible with both FFTW and physical
-      ! ! conventions on the reciprocal-space array psi_p
-      ! psi_p%grid(FLOOR((NN - 1)/2.D0)+2:NN) = psi_p%grid(FLOOR((NN - 1)/2.D0)+2:NN) - (2*PI*NN)/LL
-
-      ! ! fill array
-      ! sigmax = LL/20.D0
-      ! psi_x%elem_fftw = (/ (  EXP(-0.5D0*((psi_x%grid(ii) - (LL/2.4D0))/sigmax)**2.D0) * &
-      !                         EXP(COMPLEX(0,(2*PI/LL)*10*psi_x%grid(ii))), ii=1,NN) /)
-
-
-      ! CALL checkpoint(debug, str="")
-
-
-      ! ! write wavefunction into file
-      ! CALL SYSTEM('mkdir -p results')
-      ! CALL writeWFFile(psi_x, unit=10, file="results/init.dat", format="ES24.17")
-      ! CALL checkpoint(debug, str="Norm^2 of psi_x =", val=norm2_WF(psi_x))
-      ! CALL checkpoint(debug, str="")
-
-
-      ! ! direct FFT
-      ! CALL CPU_TIME(ti)
-      ! CALL fftw_execute_dft(plan_direct, psi_x%elem_fftw, psi_p%elem_fftw)
-      ! CALL CPU_TIME(tf)
-      ! CALL checkpoint(debug, str="Time [s] necessary to execute direct plan =", val=tf-ti)
-
-      ! CALL writeWFFile(psi_p, unit=20, file="results/FFT_init.dat", format="ES24.17")
-      ! CALL checkpoint(debug, str="Norm^2 of psi_p =", val=norm2_WF(psi_p))
-      ! CALL checkpoint(debug, str="")
-
-
-      ! ! inverse FFT
-      ! CALL CPU_TIME(ti)
-      ! CALL fftw_execute_dft(plan_inverse, psi_p%elem_fftw, psi_x%elem_fftw)
-      ! CALL CPU_TIME(tf)
-      ! CALL checkpoint(debug, str="Time [s] necessary to execute inverse plan =", val=tf-ti)
-
-      ! CALL writeWFFile(psi_x, unit=30, file="results/FFT_inverse.dat", format="ES24.17")
-      ! CALL checkpoint(debug, str="Norm^2 of psi_x (after FT and inverse FT) =", val=norm2_WF(psi_x))
-      ! CALL checkpoint(debug, str="")
-
-
-      ! ! destroy plans and free WF memory
-      ! CALL fftw_destroy_plan(plan_direct)
-      ! CALL fftw_destroy_plan(plan_inverse)
-
-
-
+      ! free wavefunctions
       CALL freeWF(psi_x)
       CALL freeWF(psi_p)
 
