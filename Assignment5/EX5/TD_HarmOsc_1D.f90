@@ -32,7 +32,7 @@ PROGRAM TD_HarmOsc_1D
       ! utility and loop variables
       REAL*8, PARAMETER :: PI = 4.D0*ATAN(1.D0)
       CHARACTER(LEN=100) :: str
-      INTEGER :: print_idx, t_idx
+      INTEGER :: t_idx
 
       ! wavefunctions
       INTEGER :: Ninit, idx_minL, idx_minR
@@ -182,6 +182,7 @@ PROGRAM TD_HarmOsc_1D
       ! -----------------------------------------
 
       CALL SYSTEM("mkdir -p results")
+      CALL SYSTEM("mkdir -p results/WFs")
       CALL checkpoint(debug, str="Started computing time evolution")
 
       deltat = Ttot/Nt
@@ -189,7 +190,10 @@ PROGRAM TD_HarmOsc_1D
       ! vector to transform wavefunctions
       ALLOCATE(operator(Nx))
 
-      print_idx = 1
+      ! open files to save results
+      OPEN(unit=31, file="results/WF_norm2.dat")
+      OPEN(unit=32, file="results/WF_avg_x.dat")
+                  
       DO t_idx = 1, Nt
             ! V/2 propagation
             operator = EXP(COMPLEX(0.D0,-1.D0)*deltat*(omega**2)*0.5D0*(psi_x%grid - (t_idx*1.D0)/Nt)**2)
@@ -212,15 +216,20 @@ PROGRAM TD_HarmOsc_1D
 
             ! print wavefunctions on file
             IF(MOD(t_idx, 10) .EQ. 0) THEN
-                  WRITE(str, "('results/outWF_', I0, '.dat')") t_idx
-                  CALL writeWFFile(psi_x, unit=30+print_idx, file=TRIM(str), format="ES24.17")
-                  print_idx = print_idx + 1
-
-                  PRINT *, norm2_WF(psi_x, weights=psi_x%grid)
+                  WRITE(str, "('results/WFs/outWF_', I0, '.dat')") t_idx
+                  CALL writeWFFile(psi_x, unit=33, file=TRIM(str), format="ES24.17")
             END IF
+
+            ! print norm2
+            WRITE(31, "(ES25.17, ' ')", advance="no") norm2_WF(psi_x)
+
+            ! print x average value
+            WRITE(32, "(ES25.17, ' ')", advance="no") norm2_WF(psi_x, psi_x%grid)
 
       END DO
 
+      CLOSE(unit=31)
+      CLOSE(unit=32)
       CALL checkpoint(debug, str="Finished computing time evolution")
 
 

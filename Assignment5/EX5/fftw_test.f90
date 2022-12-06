@@ -28,16 +28,15 @@ PROGRAM FFTW_test
       REAL*4 :: ti, tf
 
       type(C_PTR) :: plan_direct, plan_inverse
-      INTEGER :: NN = 1000
+      INTEGER :: NN = 500
       REAL*8 :: LL = 1.D0
       REAL*8 :: sigmax
 
 
       ! WF declarations and allocations
-      TYPE(Zwavefunc) :: psi_x, psi_p, psi_try
+      TYPE(Zwavefunc) :: psi_x, psi_p
       psi_x = Zwavefunc(length=NN, need_fftw_alloc=.TRUE.)
       psi_p = Zwavefunc(length=NN, need_fftw_alloc=.TRUE.)
-      psi_try = Zwavefunc(length=20, need_fftw_alloc=.TRUE.)
 
       ! create plans before filling the arrays
       CALL CPU_TIME(ti)

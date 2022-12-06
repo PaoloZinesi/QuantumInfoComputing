@@ -1,12 +1,20 @@
 
-# both the source code and the modules have a debug variable set to .FALSE.
+# The source codes have a debug variable set to .TRUE.
 # change them and recompile everything if a different behavior is desired
 
-./a.out 10000 10 input/omega.dat results/out.dat
-# will evaluate N=10000 function points of the 1D harmonic oscillator,
-# find k=10 eigenvalues,
-# take the value of omega from 'input/omega.dat' file and 
-# write the results on 'results/out.dat'.
+./fftw_test
+# will create three files in the folder 'results', which can be plotted using 
+# EX5_plots.ipynb notebook. In these output files the first row contains the grid
+# on which the WF is defined, while the other rows contain the values of the WF
+# (real and imaginary part are the two values that appear in each row).
+
+
+./TD_HarmOsc_1D.out 100 input/omega.dat input/Ttot.dat input/init_WF.dat
+# will evolve the wavefunction from t=0 to t=Ttot through 100 time steps,
+# using the value of omega found
+# in 'input/omega.dat', the value of Ttot found in 'input/Ttot.dat' and
+# the initialization wavefunction found in 'input/init_WF.dat'.
+# Results are created in the 'results' folder.
 
 
 # pay attention run 'bash compile.sh' script only when previous results
@@ -16,4 +24,4 @@
 
 
 # when all the calculations are finished and stored into 'results',
-# run the python code "EX4_plots.ipynb" to obtain the plots
+# run the python code "EX5_plots.ipynb" to obtain the plots
