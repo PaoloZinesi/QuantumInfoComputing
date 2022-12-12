@@ -17,7 +17,7 @@ def generate_separable_wf(N=2, D=2, rng=random.default_rng()):
     """
     Function to create a separable wavefunction considering D-dimensional Hilbert spaces and N subsystems.
     The wavefunction is initialized considering a normal-distributed variable with mu=0 and sigma=1 for both the
-    real and the imaginary parts of each element, EXCEPT for the first element which is real and it fixes the normalization.
+    real and the imaginary parts of each element, EXCEPT for the first element of each row which is real.
     
     inputs:
     - N [integer]: number of subsystems to consider
@@ -40,10 +40,10 @@ def generate_separable_wf(N=2, D=2, rng=random.default_rng()):
     
     ti = time.perf_counter()
     
-    # the first term is real (fixes global phase)
+    # the first term is real
     WF = rng.standard_normal(size=(N,D,)) + 1.0j * rng.standard_normal(size=(N,D,))
-    WF[0,0] = np.real(WF[0,0])
-    WF /= np.sqrt(np.sum(np.abs(WF)**2))
+    WF[:,0] = np.real(WF[:,0])
+    WF /= np.sqrt(np.sum(np.abs(WF)**2, axis=1)).reshape(-1,1)
     
     tf = time.perf_counter()
     dim_bytes = WF.nbytes

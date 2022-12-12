@@ -7,8 +7,11 @@
 import numpy as np
 from numpy import random
 import pandas as pd
+import os
 
 import manybody_functions as mb
+
+os.system("mkdir -p results")
 
 
 # %% [markdown]
