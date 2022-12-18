@@ -41,3 +41,6 @@
 *.dat
 *.log
 *.csv
+
+# Jupyter Notebooks
+*.ipynb

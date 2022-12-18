@@ -1,0 +1,20 @@
+
+# The source codes have a debug variable set to .FALSE.
+# change them and recompile everything if a different behavior is desired
+
+
+./Ising1D 6 10 input/lambda.dat
+# will create a (2**6,2**6) = (64,64) Hamiltonian and compute the 10 lowest 
+# eigenvalues using the value of lambda stored into 'input/lambda.dat'.
+# Results are stored in the folder "results".
+# For machines with 8 GB of RAM, the maximum allowed N is 14.
+
+
+# pay attention run 'bash compile.sh' script only when previous results
+# can be removed, since the script will remove every file in the folder 'results'
+
+# error messages in the execution are stored in 'errors.log' file
+
+
+# when all the calculations are finished and stored into 'results',
+# run the python code "Ex7_plots.ipynb" to obtain the plots
