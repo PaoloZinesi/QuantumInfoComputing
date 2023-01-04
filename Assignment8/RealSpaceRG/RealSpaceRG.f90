@@ -150,12 +150,12 @@ PROGRAM RealSpaceRG
 
 
       ! fill AN of the first iteration (iterRG=0)
-      CALL tensorProductIdentity(AN, sigmaX, NN, 1, NN-1)
+      CALL tensorProductIdentity(AN, sigmaX, 2**(NN-1))
       CALL checkpoint(debug, "Filled starting AN")
 
 
       ! fill BN of the first iteration (iterRG=0)
-      CALL tensorProductIdentity(BN, sigmaX, NN, 1, 0)
+      CALL tensorProductIdentity(BN, sigmaX, 2**0)
       CALL checkpoint(debug, "Filled starting BN")
       CALL checkpoint(debug, str="")
       
@@ -175,13 +175,13 @@ PROGRAM RealSpaceRG
             CALL CPU_TIME(ti)
 
             ! fill HN * id_NN
-            CALL tensorProductIdentity(mat2N, HN, 2*NN, NN, 0)
+            CALL tensorProductIdentity(mat2N, HN, 2**0)
 
             ! fill id_NN * HN
-            CALL tensorProductIdentity(mat2N, HN, 2*NN, NN, NN)
+            CALL tensorProductIdentity(mat2N, HN, 2**NN)
 
             ! fill AN * BN
-            CALL generalTensorProduct(mat2N, AN, BN, NN, NN)
+            CALL generalTensorProduct(mat2N, AN, BN)
 
             CALL CPU_TIME(tf)
             t_H2N_creation = tf-ti
@@ -221,7 +221,7 @@ PROGRAM RealSpaceRG
 
             ! fill AN matrix of the next step
             mat2N = 0.D0
-            CALL tensorProductIdentity(mat2N, AN, 2*NN, NN, NN)
+            CALL tensorProductIdentity(mat2N, AN, 2**NN)
 
             CALL CPU_TIME(ti)
             ! call matrix multiplication routines to compute AN matrix of the next step
@@ -242,7 +242,7 @@ PROGRAM RealSpaceRG
 
             ! fill BN matrix of the next step
             mat2N = 0.D0
-            CALL tensorProductIdentity(mat2N, BN, 2*NN, NN, 0)
+            CALL tensorProductIdentity(mat2N, BN, 2**0)
 
             CALL CPU_TIME(ti)
             ! call matrix multiplication routines to compute BN matrix of the next step

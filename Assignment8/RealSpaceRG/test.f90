@@ -14,7 +14,8 @@ PROGRAM test_RG
       IMPLICIT NONE
       !LOGICAL :: debug = .TRUE.
 
-      INTEGER, PARAMETER :: NN = 3
+      INTEGER :: ii
+      INTEGER, PARAMETER :: NN = 5
       REAL :: ti, tf
 
       REAL*8, DIMENSION(:,:), ALLOCATABLE :: HN
@@ -31,12 +32,17 @@ PROGRAM test_RG
       CALL fillSigmaZ(sigmaZ, 1, 1)
 
 
-      ! fill all sigmax sigmax interactions
+      ! fill all interactions
       HN = 0.D0
       CALL CPU_TIME(ti)
-      CALL generalTensorProduct(HN, sigmaXsigmaX, sigmaZ, 2, 1)
+      DO ii = 1, NN
+            CALL tensorProductIdentity(HN, sigmaZ, 2**(ii-1))
+      END DO
+      DO ii = 1, NN-1
+            CALL tensorProductIdentity(HN, sigmaXsigmaX, 2**(ii-1))
+      END DO
       CALL CPU_TIME(tf)
-      PRINT "('XXZ computation with generalTensorProduct = ', ES15.7)", tf-ti
+      PRINT "('Hamiltonian computation with tensorProductIdentity = ', ES15.7)", tf-ti
 
 
       CALL writeMatFile(HN, unit=10, file="HN.dat", format="(ES24.16)")

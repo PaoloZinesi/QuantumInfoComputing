@@ -31,4 +31,4 @@ RealSpaceRG.o ../modules/checkpoint_mod.o ../modules/ManyBodyUtils_mod.o \
 -L$LAPACK_PATH -llapack -lblas -ltmglib
 
 mkdir -p results
-echo N, iterRG, lambda, t_H2N_creation, t_H2N_diag, t_N_matmul >> results/timescalings.csv
+echo N,iterRG,lambda,t_H2N_creation,t_H2N_diag,t_N_matmul >> results/timescalings.csv
