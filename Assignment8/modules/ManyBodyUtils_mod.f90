@@ -423,7 +423,7 @@ MODULE ManyBodyUtils_mod
       ! - unit [integer]: identifier of the unit connected to the file
       ! - file [character(len=*)]: filename where matrix has to be written
       ! - format [character(len=*)]: string to specify how to format written numbers.
-      !                              A suggestion is to use format="(ES24.17)"
+      !                              A suggestion is to use format="(ES24.16)"
       !                              
       ! outputs: None
       ! 
