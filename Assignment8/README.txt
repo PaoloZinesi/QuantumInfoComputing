@@ -6,14 +6,14 @@ cd modules ; bash compile.sh ; cd ..
 
 
 # After all the .mod and .o files have been generated in the "modules"
-# folder, proceed with the compilation of source codes in
-# "Ising1D" using the bash scripts "Ising1D/compile.sh"
+# folder, proceed with the compilation of source codes in the folder
+# using the bash scripts "*/compile.sh"
 # 
 # Example: 
-cd Ising1D ; bash compile.sh
+cd RealSpaceRG ; bash compile.sh
 
 
-# Finally, the executable "Ising1D.out" will be find in the folder "Ising1D"
+# Finally, the executable "RealSpaceRG.out" will be find in the folder "RealSpaceRG"
 
 
 # Examples of execution for each program are contained in the 

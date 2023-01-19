@@ -15,13 +15,7 @@ rm -f *.log
 
 # compile single codes without linking them
 gfortran -I ../modules -Wall -Wextra -O3 \
--c test.f90 RealSpaceRG.f90 \
--L$LAPACK_PATH -llapack -lblas -ltmglib
-
-# then link and produce executable *.out
-gfortran -Wall -Wextra -O3 \
--o test.out \
-test.o ../modules/checkpoint_mod.o ../modules/ManyBodyUtils_mod.o \
+-c RealSpaceRG.f90 \
 -L$LAPACK_PATH -llapack -lblas -ltmglib
 
 # then link and produce executable *.out
@@ -30,5 +24,6 @@ gfortran -Wall -Wextra -O3 \
 RealSpaceRG.o ../modules/checkpoint_mod.o ../modules/ManyBodyUtils_mod.o \
 -L$LAPACK_PATH -llapack -lblas -ltmglib
 
+# create utility files/directories
 mkdir -p results
 echo N,iterRG,lambda,t_H2N_creation,t_H2N_diag,t_N_matmul >> results/timescalings.csv

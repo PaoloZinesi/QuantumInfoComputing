@@ -1,6 +1,9 @@
 ! Module that contains various many body Hamiltonians utilities, such as subroutines for left and right tensor products
 ! with identities for many-body Hamiltonians. These subroutines can then be applied to simulations with very large Hamiltonians
-! (such as RG, DMRG,...).
+! (such as RSRG, DMRG,...). Regarding tensor products, the subroutine "generalTensorProduct" implements the most general tensor product
+! and should be used only when the two matrices have not many zeroes. For computing the tensor product with identity matrices, for
+! instance, "tensorProductIdentity" should be used. Pay attention that these subroutines does NOT return the goal matrix, but they
+! fill instead an input matrix with the desired tensor product.
 ! 
 ! Author: Paolo Zinesi
 !
@@ -10,8 +13,6 @@ MODULE ManyBodyUtils_mod
       IMPLICIT NONE
 
       LOGICAL, PRIVATE :: debug = .FALSE.
-      ! The interface in this module is NOT needed, because FORTRAN
-      ! generates a dedicated one when importing this module in the main program
 
       CONTAINS
 

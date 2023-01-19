@@ -1,0 +1,23 @@
+
+# The source codes have a debug variable set to .FALSE.
+# change them and recompile everything if a different behavior is desired
+
+
+./InfiniteDMRG.out 10000 16 input/lambda.dat input/eps.dat
+# will find the energy density of the ground state of the system, 
+# until the maximum number of iterations = 10000 is reached or the updates 
+# of the energy goes below the threshold contained in "input/eps.dat".
+# The value of lambda is contained in the file "input/lambda.dat".
+# The evolution of the energy density over the iterations is saved into the file
+# "results/spectra/spectrum_10000_16.dat" and the time needed for the computations 
+# is appended to "results/timescalings.csv".
+
+
+# pay attention run 'bash compile.sh' script only when previous results
+# can be removed, since the script will remove every file in the folder 'results'
+
+# error messages in the execution are stored in 'errors.log' file
+
+
+# when all the calculations are finished and stored into 'results',
+# run the python code "../RG_plots.pynb" to obtain the plots

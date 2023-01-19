@@ -1,15 +1,23 @@
 ! Program to simulate the one-dimensional Ising model with Hamiltonian
 ! H = \lambda \sum_{i=1}^N \sigma_i^z + \sum_{i=1}^{N-1} \sigma_i^x \sigma_{i+1}^x
 ! with interaction strength \lambda using a coarse-graining procedure to find the ground state energy. 
-! 
-! ---
-! INFINITE-DMRG
-! ---
-! The program uses the module...
+! The program uses the module "ManyBodyUtils_mod.f90" to perform the many-body functions compactly and 
+! the LAPACK routines DSYEVX, DGEMM to perform matrix diagonalization and matrix-matrix multiplication,
+! respectively.
+! The simulation is performed using the Infinite Density Matrix Renormalization Group procedure.
+! Specifically, at each iteration step the system size is increased by two and the exact total Hamiltonian of 
+! size ((m_old*d)**2,(m_old*d)**2) is transformed into an effective Hamiltonian of size ((m*d)**2,(m*d)**2) 
+! by projecting it in the space of the largest 'm' populations of the reduced density matrices obtained from the 
+! total Hamiltonian. At each step, the value of 'm' is updated so that m = min(m_max, 2*m_old).
+! The starting system always contains 4 sites, for a total dimension of (2**4,2**4) for the starting total
+! Hamiltonian.
 ! 
 ! Example of execution:
-! ./InfiniteDRMG 1000 50 input/lambda.dat
-! will ...
+! ./InfiniteDRMG.out 10000 16 input/lambda.dat input/eps.dat
+! will find the energy density of the ground state of the system, until the maximum number of iterations = 10000 
+! is reached or the updates of the energy goes below the threshold contained in "input/eps.dat". The value of lambda is
+! contained in the file "input/lambda.dat". The evolution of the energy density over the iterations is saved into the file
+! "results/spectra/spectrum_10000_16.dat" and the time needed for the computations is appended to "results/timescalings.csv".
 !
 ! Author: Paolo Zinesi
 !
@@ -19,7 +27,7 @@ PROGRAM InfiniteDRMG
       USE checkpoint_mod
       USE ManyBodyUtils_mod
       IMPLICIT NONE
-      LOGICAL :: debug = .TRUE.
+      LOGICAL :: debug = .FALSE.
 
       ! variables to store Hamiltonians and eigenvectors
       REAL*8, DIMENSION(:,:), ALLOCATABLE :: H1, H2, H3, H4
@@ -29,7 +37,8 @@ PROGRAM InfiniteDRMG
       INTEGER :: Nitermax, mmax
       INTEGER :: mm_old, mm
       INTEGER, PARAMETER :: dd = 2
-      REAL*8 :: lambda
+      REAL*8 :: lambda, eps
+      REAL*8 :: energydensity = 0.D0, energy_update = 1.D0
       INTEGER :: N_eff = 4
 
       ! variables to compute reduced density matrices
@@ -42,11 +51,8 @@ PROGRAM InfiniteDRMG
       REAL*8, DIMENSION(2,2) :: sigmaX
       REAL :: ti, tf
 
-      ! ! variables to store timescalings
-      ! REAL :: t_H2N_creation, t_H2N_diag, t_N_matmul
-
       ! variables to read command-line arguments
-      CHARACTER(LEN=100) :: arg, lambdafile
+      CHARACTER(LEN=100) :: arg, lambdafile, epsfile
 
       ! variables to call DSYEVX subroutine
       REAL*8, EXTERNAL :: DLAMCH
@@ -71,7 +77,7 @@ PROGRAM InfiniteDRMG
       ! read command-line arguments
       ! -----------------------------------------
 
-      IF (COMMAND_ARGUMENT_COUNT() .EQ. 3) THEN
+      IF (COMMAND_ARGUMENT_COUNT() .EQ. 4) THEN
 
             ! Nitermax: number of iterations in the RG algorithm
             CALL GET_COMMAND_ARGUMENT(1, arg)
@@ -87,28 +93,36 @@ PROGRAM InfiniteDRMG
             OPEN(unit=20, file=TRIM(lambdafile), status='OLD')
                   READ(20,*) lambda
             CLOSE(unit=20)
+
+            ! epsfile: filename where to read the value of goal precision eps
+            ! gives an error if input file does not exist
+            CALL GET_COMMAND_ARGUMENT(4, epsfile)
+            OPEN(unit=20, file=TRIM(epsfile), status='OLD')
+                  READ(20,*) eps
+            CLOSE(unit=20)
             
       ELSE
             ! write error details into an error log file 
             PRINT *, "An error occurred, details on 'errors.log'"
-            WRITE(10, "('Exactly 3 command-line arguments are expected:')")
-            WRITE(10, "('Nitermax, mmax, lambdafile')")
+            WRITE(10, "('Exactly 4 command-line arguments are expected:')")
+            WRITE(10, "('Nitermax, mmax, lambdafile, epsfile')")
             STOP
       END IF
 
 
       ! checks on input validity
-      IF ((Nitermax .LE. 0) .OR. (mmax .LT. 2)) THEN
+      IF ((Nitermax .LE. 0) .OR. (mmax .LT. 2) .OR. (eps .LE. 0.D0)) THEN
 
             ! write error details into an error log file
             PRINT *, "An error occurred, details on 'errors.log'"
-            WRITE(10, "('Variables must be `Nitermax`>0 and `mmax`>=2')")
+            WRITE(10, "('Variables must be `Nitermax`>0, `mmax`>=2, and `eps`>0')")
             STOP
       END IF
 
       CALL checkpoint(debug, str="Nitermax = ", val=Nitermax)
       CALL checkpoint(debug, str="mmax = ", val=mmax)
       CALL checkpoint(debug, str="Lambda = ", val=lambda)
+      CALL checkpoint(debug, str="Eps = ", val=eps)
       CALL checkpoint(debug, str="")
 
 
@@ -147,6 +161,7 @@ PROGRAM InfiniteDRMG
       ! -----------------------------------------
       ! 0-th iteration
       ! -----------------------------------------
+      CALL CPU_TIME(ti)
 
       ! initialize matrices
       mm = 2
@@ -200,8 +215,8 @@ PROGRAM InfiniteDRMG
       ! -----------------------------------------
       ! RG iterations
       ! -----------------------------------------
-
-      DO iterRG = 1, Nitermax
+      iterRG = 1
+      DO WHILE((iterRG .LE. Nitermax) .AND. (ABS(energy_update) .GT. eps))
             CALL checkpoint(debug, str="Iteration ", val=iterRG)
 
             ! the updated value of mm cannot be greater than mmax
@@ -214,26 +229,28 @@ PROGRAM InfiniteDRMG
             ! ---------------------------------
             ! diagonalization of Htot
             ! ---------------------------------
-            CALL CPU_TIME(ti)
             ! call diagonalization routine
-            CALL DSYEVX('V', 'I', &                               ! compute eigenvalues and eigenvectors with index in [IL,IU]
-                        'L', &                                    ! store lower triangular matrix
-                        (mm_old*dd)**2, &                         ! order of Htot
-                        Htot(1:(mm_old*dd)**2,1:(mm_old*dd)**2),& ! subset of matrix Htot
-                        (mm_old*dd)**2, &                         ! leading dimension of Htot
-                        0.D0, 1.D0, &                             ! VL, VU are not referenced since RANGE="I"
-                        1, 1, &                                   ! find only first eigenvalue (IL=IU=1)
-                        2*DLAMCH('S'), &                          ! absolute error tolerance for the eigenvalues
-                        eig_num, eigenvals(1:1),&                 ! eigenvalues and eigenvalues number
-                        psi_GS(1:(mm_old*dd)**2,1:1), (mm_old*dd)**2, &                   ! eigenvectors and their leading dimension
-                        work, lwork, iwork, &                     ! work, lwork, iwork variables
-                        ifail, info &                             ! fail indices and info value
+            CALL DSYEVX('V', 'I', &                                     ! compute eigenvalues and eigenvectors with index in [IL,IU]
+                        'L', &                                          ! store lower triangular matrix
+                        (mm_old*dd)**2, &                               ! order of Htot
+                        Htot(1:(mm_old*dd)**2,1:(mm_old*dd)**2),&       ! subset of matrix Htot
+                        (mm_old*dd)**2, &                               ! leading dimension of Htot
+                        0.D0, 1.D0, &                                   ! VL, VU are not referenced since RANGE="I"
+                        1, 1, &                                         ! find only first eigenvalue (IL=IU=1)
+                        2*DLAMCH('S'), &                                ! absolute error tolerance for the eigenvalues
+                        eig_num, eigenvals(1:1),&                       ! eigenvalues and eigenvalues number
+                        psi_GS(1:(mm_old*dd)**2,1:1), (mm_old*dd)**2, & ! eigenvectors and their leading dimension
+                        work, lwork, iwork, &                           ! work, lwork, iwork variables
+                        ifail, info &                                   ! fail indices and info value
             )
-            CALL CPU_TIME(tf)
-
             
-            ! energy density
-            PRINT "('g.s. energy density = ', ES23.16)", eigenvals(1)/N_eff
+            ! computation of energy density
+            energy_update = energydensity - eigenvals(1)/N_eff
+            energydensity = eigenvals(1)/N_eff
+            IF(MOD(iterRG, MAX(1,Nitermax/1000)) .EQ. 1) THEN
+                  ! write ground state energy for the given iterRG
+                  WRITE(20, "(ES24.16, ' ')", advance="no") energydensity
+            END IF
             
             !t_H2N_diag = tf-ti
             CALL checkpoint(debug, "INFO value of DSYEVX = ", val=info)
@@ -243,7 +260,7 @@ PROGRAM InfiniteDRMG
             
 
             ! ---------------------------
-            ! reduced density matrices
+            ! reduced density matrix
             ! ---------------------------
             ! left reduced density matrix (only upper triangular part)
             rho = 0.D0
@@ -266,23 +283,20 @@ PROGRAM InfiniteDRMG
             ! ----------------------------------
             ! diagonalization of left subsystem
             ! ----------------------------------
-            CALL CPU_TIME(ti)
             ! call diagonalization routine
-            CALL DSYEVX('V', 'I', &                         ! compute eigenvalues and eigenvectors with index in [IL,IU]
-                        'U', &                              ! store upper triangular matrix
-                        mm_old*dd, &                        ! order of rho
-                        rho(1:mm_old*dd,1:mm_old*dd),&      ! subset of matrix rho
-                        mm_old*dd, &                        ! leading dimension of rho
-                        0.D0, 1.D0, &                       ! VL, VU are not referenced since RANGE="I"
-                        mm_old*dd-mm+1, mm_old*dd, &        ! find the last mm eigenvalues (from IL=mm_old*dd-mm+1 to UL=mm_old*dd)
-                        2*DLAMCH('S'), &                    ! absolute error tolerance for the eigenvalues
-                        eig_num, eigenvals(1:mm), &         ! eigenvalues and eigenvalues number
-                        eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &              ! eigenvectors and their leading dimension
-                        work, lwork, iwork, &               ! work, lwork, iwork variables
-                        ifail, info &                       ! fail indices and info value
+            CALL DSYEVX('V', 'I', &                                     ! compute eigenvalues and eigenvectors with index in [IL,IU]
+                        'U', &                                          ! store upper triangular matrix
+                        mm_old*dd, &                                    ! order of rho
+                        rho(1:mm_old*dd,1:mm_old*dd),&                  ! subset of matrix rho
+                        mm_old*dd, &                                    ! leading dimension of rho
+                        0.D0, 1.D0, &                                   ! VL, VU are not referenced since RANGE="I"
+                        mm_old*dd-mm+1, mm_old*dd, &                    ! find the last mm eigenvalues (from IL=mm_old*dd-mm+1 to UL=mm_old*dd)
+                        2*DLAMCH('S'), &                                ! absolute error tolerance for the eigenvalues
+                        eig_num, eigenvals(1:mm), &                     ! eigenvalues and eigenvalues number
+                        eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &      ! eigenvectors and their leading dimension
+                        work, lwork, iwork, &                           ! work, lwork, iwork variables
+                        ifail, info &                                   ! fail indices and info value
             )
-            CALL CPU_TIME(tf)
-            !t_H2N_diag = tf-ti
             CALL checkpoint(debug, "INFO value of DSYEVX = ", val=info)
             CALL checkpoint(debug, "Optimal size of LWORK = ", val=work(1))
             CALL checkpoint(debug, "Used size of LWORK = ", val=lwork)
@@ -294,51 +308,40 @@ PROGRAM InfiniteDRMG
             ! projection of Hamiltonians in the restricted 
             ! basis for left subsystem
             !-----------------------------------------------------
-            CALL CPU_TIME(ti)
-            tmp_matmul = 0.D0
             ! call matrix multiplication routines to find H1 of the next iteration
-            CALL DGEMM('T', 'N', &                          ! transpose A, B not transposed 
-                       mm, mm_old*dd, mm_old*dd, 1.D0, &    ! M=rows of A**T, N=columns of B, K=cols of A**T, alpha
-                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &           ! A matrix (eigenvectors) with its leading dimension
-                       H12buff(1:mm_old*dd,1:mm_old*dd), mm_old*dd, &       ! B matrix (H12buff) with its leading dimension
-                       0.D0, tmp_matmul(1:mm,1:mm_old*dd), mm &             ! buffer matrix and its leading dimension
+            CALL DGEMM('T', 'N', &                                      ! transpose A, B not transposed 
+                       mm, mm_old*dd, mm_old*dd, 1.D0, &                ! M=rows of A**T, N=columns of B, K=cols of A**T, alpha
+                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &       ! A matrix (eigenvectors) with its leading dimension
+                       H12buff(1:mm_old*dd,1:mm_old*dd), mm_old*dd, &   ! B matrix (H12buff) with its leading dimension
+                       0.D0, tmp_matmul(1:mm,1:mm_old*dd), mm &         ! buffer matrix and its leading dimension
             )
-            H1 = 0.D0
-            CALL DGEMM('N', 'N', &                          ! A and B not transposed 
-                       mm, mm, mm_old*dd, 1.D0, &           ! M=rows of A, N=columns of B, K=cols of A, alpha
-                       tmp_matmul(1:mm,1:mm_old*dd), mm, &                  ! A matrix (tmp_matmul) with its leading dimension
-                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &               ! B matrix (eigenvectors) with its leading dimension
-                       0.D0, H1(1:mm,1:mm), mm &                     ! NEW H1 matrix and its leading dimension
+            CALL DGEMM('N', 'N', &                                      ! A and B not transposed 
+                       mm, mm, mm_old*dd, 1.D0, &                       ! M=rows of A, N=columns of B, K=cols of A, alpha
+                       tmp_matmul(1:mm,1:mm_old*dd), mm, &              ! A matrix (tmp_matmul) with its leading dimension
+                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &       ! B matrix (eigenvectors) with its leading dimension
+                       0.D0, H1(1:mm,1:mm), mm &                        ! NEW H1 matrix and its leading dimension
             )
-            CALL CPU_TIME(tf)
-            !t_N_matmul = 0.5*(tf-ti)
 
-          
 
-            CALL CPU_TIME(ti)
-            tmp_matmul = 0.D0
+            H12 = 0.D0
+            CALL tensorProductIdentity(H12(1:mm_old*dd,1:mm_old*dd), sigmaX, mm_old)
             ! call matrix multiplication routines to find H12 of the next iteration
-            CALL DGEMM('T', 'N', &                          ! transpose A, B not transposed 
-                       mm, mm_old*dd, mm_old*dd, 1.D0, &    ! M=rows of A**T, N=columns of B, K=cols of A**T, alpha
-                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &   ! A matrix (eigenvectors) with its leading dimension
-                       H12(1:mm_old*dd,1:mm_old*dd), mm_old*dd, &   ! B matrix (H12) with its leading dimension
-                       0.D0, tmp_matmul(1:mm,1:mm_old*dd), mm &             ! buffer matrix and its leading dimension
+            CALL DGEMM('T', 'N', &                                      ! transpose A, B not transposed 
+                       mm, mm_old*dd, mm_old*dd, 1.D0, &                ! M=rows of A**T, N=columns of B, K=cols of A**T, alpha
+                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &       ! A matrix (eigenvectors) with its leading dimension
+                       H12(1:mm_old*dd,1:mm_old*dd), mm_old*dd, &       ! B matrix (H12) with its leading dimension
+                       0.D0, tmp_matmul(1:mm,1:mm_old*dd), mm &         ! buffer matrix and its leading dimension
             )
-            H12buff = 0.D0
-            CALL DGEMM('N', 'N', &                          ! A and B not transposed 
-                       mm, mm, mm_old*dd, 1.D0, &           ! M=rows of A, N=columns of B, K=cols of A, alpha
-                       tmp_matmul(1:mm,1:mm_old*dd), mm, &                  ! A matrix (tmp_matmul) with its leading dimension
-                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &               ! B matrix (eigenvectors) with its leading dimension
-                       0.D0, H12buff(1:mm,1:mm), mm &        ! buffer matrix and its leading dimension
+            CALL DGEMM('N', 'N', &                                      ! A and B not transposed 
+                       mm, mm, mm_old*dd, 1.D0, &                       ! M=rows of A, N=columns of B, K=cols of A, alpha
+                       tmp_matmul(1:mm,1:mm_old*dd), mm, &              ! A matrix (tmp_matmul) with its leading dimension
+                       eigenvects(1:mm_old*dd,1:mm), mm_old*dd, &       ! B matrix (eigenvectors) with its leading dimension
+                       0.D0, H12buff(1:mm,1:mm), mm &                   ! buffer matrix and its leading dimension
             )
-            CALL CPU_TIME(tf)
 
             ! filling of NEW H12 matrix using sigmaX and the buffer H12buff
             H12 = 0.D0
             CALL generalTensorProduct(H12(1:mm*dd,1:mm*dd), H12buff(1:mm,1:mm), sigmaX)
-
-            !t_N_matmul = t_N_matmul + 0.5*(tf-ti)
-            ! CALL checkpoint(debug, str="Time needed [s] =  ", val=tf-ti)
             CALL checkpoint(debug, str="Successful calculation of next step matrices H1,H12")
 
             ! filling symmetric Hamiltonians
@@ -378,24 +381,24 @@ PROGRAM InfiniteDRMG
 
             ! effective system size described by the current Hamiltonian
             N_eff = 4 + 2*iterRG
-
-
-            ! ! -----------------------------------------
-            ! ! write results
-            ! ! -----------------------------------------
-            ! ! write timescaling
-            ! OPEN(unit=21, file="results/timescalings.csv", access='APPEND')
-            !       !WRITE(21, "(I0, ',', I0, ',', ES24.17, ',', ES13.7, ',', ES13.7, ',', ES13.7)") &
-            !       WRITE(21, "(I0, ',', I0, ',', ES24.17, 3(',', ES13.7))") &
-            !             NN, iterRG, lambda, t_H2N_creation, t_H2N_diag, t_N_matmul
-            ! CLOSE(unit=21)
-
-            ! ! write ground state energy for the given iterRG
-            ! WRITE(20, "(ES24.17, ' ')", advance="no") HN(1,1)/NN
+            iterRG = iterRG + 1
 
       END DO
+
+      ! write ground state energy of the last given iterRG
+      WRITE(20, "(ES24.16, ' ')", advance="no") energydensity
       WRITE(20, *)
       WRITE(20, *)
+      CALL CPU_TIME(tf)
+
+      ! -----------------------------------------
+      ! write results
+      ! -----------------------------------------
+      ! write timescaling
+      OPEN(unit=21, file="results/timescalings.csv", access='APPEND')
+      WRITE(21, "(I0, ',', I0, ',', ES24.17, ',' I0, ',', ES13.7)") &
+            mmax, Nitermax, lambda, iterRG, tf-ti
+      CLOSE(unit=21)
 
 
       ! -----------------------------------------
@@ -424,7 +427,7 @@ PROGRAM InfiniteDRMG
       CLOSE(unit=10)
 
       ! close spectrum file
-      ! CLOSE(unit=20)
+      CLOSE(unit=20)
 
 
 END PROGRAM InfiniteDRMG

@@ -35,7 +35,7 @@ for N_ in N_list:
         os.system(f"echo {lambda_} > input/lambda.dat")
 
         # start computation
-        os.system(f"./RealSpaceRG.out {N_} {N_iter_max} input/lambda.dat 2>> events.log")
+        os.system(f"./RealSpaceRG.out {N_} {N_iter_max} input/lambda.dat input/eps.dat 2>> events.log")
 
         nowtime = datetime.now(tz=pytz.timezone("Europe/Rome")).strftime("%d/%m/%Y %H:%M:%S")
         os.system(f"echo Finished computation of RealSpaceRG.out N={N_}, maxiter={N_iter_max} at {nowtime} >> events.log")
